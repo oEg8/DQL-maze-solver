@@ -18,7 +18,7 @@ class MazeMaker:
         self.columns = columns
 
         # comment for random mazes
-        np.random.seed(354)
+        # np.random.seed(354)
 
         self.grid = np.zeros((rows, columns), dtype=np.int32)
         self.obstacle_ratio = obstacle_ratio
