@@ -386,6 +386,8 @@ if __name__ == '__main__':
 
     QLearn(grid=grid, visualise=False).run()
 
+    print('testtt')
+
 # if __name__ == '__main__':
 #     m = MazeEnv(3, 3)
 #     print(m.run())
