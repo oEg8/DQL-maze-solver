@@ -16,13 +16,14 @@ class MazeMaker:
 
         self.rows = rows
         self.columns = columns
-
-        # comment for random mazes
-        # np.random.seed(354)
-
-        self.grid = np.zeros((rows, columns), dtype=np.int32)
         self.obstacle_ratio = obstacle_ratio
         self.minimum_route_length = minimum_route_length
+        # self.seed = seed
+
+        # comment for random mazes
+        # self.seed = np.random.seed(354)
+
+        self.grid = np.zeros((rows, columns), dtype=np.int32)
         self.grid_with_obstacles = self.grid
         self.grid_with_obstacles = self.create_obstacles(self.obstacle_ratio)
 

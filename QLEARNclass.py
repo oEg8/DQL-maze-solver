@@ -25,17 +25,73 @@ TODO:
 """
 
 
-
 class MazeEnv:
-    pass
+    def __init__(self, rows, columns, seed=None) -> None:
+        self.rows = rows
+        self.columns = columns
 
+        maze = MazeMaker(rows, rows, 0.4, (rows+columns)/2)
+        self.grid = maze.return_maze()
+        self.start = maze.return_start_coor()
+        self.goal = maze.return_goal_coor()
+        self.position = [self.start[0], self.start[1]]
+
+    @classmethod
+    def move(self, action: int) -> list:
+        if action == 0:  
+            self.position[ROW] -= 1
+        elif action == 1:
+            self.position[ROW] += 1
+        elif action == 2:
+            self.position[COL] -= 1
+        elif action == 3:
+            self.position[COL] += 1
+
+        return self.position 
+
+    @classmethod
+    def possible_actions(self, grid, position) -> list:
+        actions = []
+        if position[ROW] - 1 >= 0 and grid[position[ROW] - 1][position[COL]] != 1:
+            actions.append(UP)
+        if position[ROW] + 1 < len(grid) and grid[position[ROW] + 1][position[COL]] != 1:
+            actions.append(DOWN)
+        if position[COL] - 1 >= 0 and grid[position[ROW]][position[COL] - 1] != 1:
+            actions.append(LEFT)
+        if position[COL] + 1 < len(grid[ROW]) and grid[position[ROW]][position[COL] + 1] != 1:
+            actions.append(RIGHT)
+
+        return actions
+
+
+    def get_grid(self):
+        return self.grid
+    
+
+    def get_position(self):
+        return self.position
+    
+
+    def get_start(self):
+        return self.start
+    
+
+    def get_goal(self):
+        return self.goal
+    
+
+    def run(self):
+        grid = self.get_grid()
+        Q = QLearn(grid=grid, visualise=False)
+        model = Q.build_model()
+        print(Q.qtrain(model=model))
+    
 
 class QLearn:
     """
-    This class solves randomly generated mazes using the Deep Q-Learning algorithm.
-
+    TODO
     """
-    def __init__(self, grid, visualise) -> None:
+    def __init__(self, grid, visualise=False) -> None: 
         self.grid = grid
         self.visualise = visualise
 
@@ -48,7 +104,7 @@ class QLearn:
         self.env_completed = False
         self.env_terminated = False
         self.step = 0
-        self.max_steps = self.grid.size * 3
+        self.max_steps = 50
 
         self.exploration_rate = 0.1
         self.exploration_rate_decay = 0.995
@@ -60,7 +116,6 @@ class QLearn:
 
 
     def reset(self):
-        self.position = [self.start[ROW], self.start[COL]] #
         self.state = self.calculate_state()
         self.total_reward = 0
         self.step = 0
@@ -121,17 +176,19 @@ class QLearn:
         return state, reward
 
 
+    @classmethod
     def get_state_size(self):
         return len(self.calculate_state())
 
 
     @classmethod
-    def get_action_size(self):
-        return 4
-    
-
     def get_action_space(self):
         return [0, 1, 2, 3]
+    
+
+    @classmethod
+    def get_action_size(self):
+        return len(self.get_action_space())
 
 
     def test_for_completion(self):
@@ -192,10 +249,10 @@ class QLearn:
         win_history = list()
 
         for episodes in range(n_episodes):
-            maze = MazeMaker(3, 3, 0.4, 4)
-            self.grid = maze.return_maze()
-            self.start = maze.return_start_coor()
-            self.position = [start[0], start[1]]
+            maze = MazeEnv(3, 3)
+            self.grid = maze.get_grid()
+            self.start = maze.get_position()
+            self.position = [self.start[0], self.start[1]]
 
             start_time_episode = time.time()
             loss = 0.0
@@ -211,17 +268,16 @@ class QLearn:
                 if self.visualise:
                     self.visualiser.draw_maze(self.grid, self.start, self.position, round(episode_cost, 3), self.step, sum(win_history))
                 possible_actions = self.possible_actions()
-                prev_state = state
+                prev_state = state.reshape(1, -1)
                 if np.random.rand() < self.exploration_rate: 
-                    # action = np.random.choice(self.get_action_space())  # willekeurige acties mogen illegaal zijn
-                    action = np.random.choice(possible_actions)   # willekeurige acties mogen niet illegaal zijn
+                    action = np.random.choice(self.get_action_space())  # willekeurige acties mogen wel illegaal zijn
+                    # action = np.random.choice(possible_actions)       # willekeurige acties mogen niet illegaal zijn
                 else:
                     q_values = model(prev_state.reshape(1, -1))
                     action = np.argmax(q_values[0])
 
                 state, reward = self.act(action)
                 episode_cost += reward
-
                 if self.test_for_completion():
                     win_history.append(1)
                     game_over = True
@@ -250,13 +306,13 @@ class QLearn:
             win_rate = sum(win_history) / len(win_history)
             end_time = time.time()
             total_time = end_time - start_time
-            template = "Epoch: {:05d}/{:d} | Mean loss: {:07.3f} | Steps: {:02d} | Win count: {:.2f} | Win rate: {:.2f} | time (s): {:.1f} | total time (s): {:.1f}"
+            template = "Epoch: {:05d}/{:d} | Mean loss: {:06.3f} | Steps: {:02d} | Win count: {:.2f} | Win rate: {:.2f} | time (s): {:.1f} | total time (s): {:.1f}"
             print(template.format(episodes+1, n_episodes, mean_loss, steps, sum(win_history), win_rate, epoch_time, total_time))
 
             if win_rate > 0.9:
                 self.exploration_rate = 0.5
 
-            if sum(win_history[-self.win_threshhold:]) == self.win_threshhold or loss == 0.0:
+            if sum(win_history[-self.win_threshhold:]) == self.win_threshhold:
                 print(f"Reached sufficient win rate at epoch: {episodes+1}")
                 break
         
@@ -266,7 +322,7 @@ class QLearn:
     def build_model(self):
         model = Sequential()
 
-        model.add(Dense(units=64, input_dim=self.grid.size+2, activation='relu'))
+        model.add(Dense(units=64, input_dim=11, activation='relu'))
         model.add(Dense(units=64, activation='relu'))
         model.add(Dense(units=self.get_action_size(), activation='linear'))
 
@@ -329,5 +385,9 @@ if __name__ == '__main__':
     goal = maze.return_goal_coor()
 
     QLearn(grid=grid, visualise=False).run()
+
+# if __name__ == '__main__':
+#     m = MazeEnv(3, 3)
+#     print(m.run())
 
 
