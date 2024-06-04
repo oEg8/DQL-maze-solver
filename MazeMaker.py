@@ -3,6 +3,11 @@ import numpy as np
 ROW = 0
 COL = 1
 
+UP = 0
+DOWN = 1
+LEFT = 2
+RIGHT = 3
+
 
 class MazeMaker:
     """
@@ -12,16 +17,12 @@ class MazeMaker:
     2: start
     3: end
     """
-    def __init__(self, rows: int, columns: int, obstacle_ratio: float, minimum_route_length: int) -> None:
-
+    def __init__(self, rows: int, columns: int, obstacle_ratio: float, minimum_route_length: int, seed: int = None) -> None:
         self.rows = rows
         self.columns = columns
         self.obstacle_ratio = obstacle_ratio
         self.minimum_route_length = minimum_route_length
-        # self.seed = seed
-
-        # comment for random mazes
-        # self.seed = np.random.seed(354)
+        self.seed = np.random.seed(seed)
 
         self.grid = np.zeros((rows, columns), dtype=np.int32)
         self.grid_with_obstacles = self.grid
@@ -30,22 +31,23 @@ class MazeMaker:
 
     def random_start_goal(self) -> tuple:
         """
-        This method generates a random coordinate for the player to start.
-        Based on that coordinate the opposite coordinate is calculated and will
-        be set as the end coordinate.
+        Generates random start coordinate on the maze's border and sets goal coordinate opposite from start.
+
+        Returns:
+            tuple: Tuple containing start coordinates and goal coordinates.
         """
         rng_side = np.random.randint(0, 4)
 
-        if rng_side == 0:  # top
+        if rng_side == UP:
             rng_start = (0, np.random.randint(0, self.columns))
             rng_goal = (self.rows-1, self.columns-rng_start[COL]-1)
-        elif rng_side == 1:  # bottom
+        elif rng_side == DOWN:
             rng_start = (self.rows-1, np.random.randint(0, self.columns))
             rng_goal = (0, self.columns-rng_start[COL]-1)
-        elif rng_side == 2:  # left
+        elif rng_side == LEFT:
             rng_start = (np.random.randint(0, self.rows), 0)
             rng_goal = (self.rows-rng_start[ROW]-1, self.columns-1)
-        elif rng_side == 3:  # right
+        elif rng_side == RIGHT:
             rng_start = (np.random.randint(0, self.rows), self.columns-1)
             rng_goal = (self.rows-rng_start[ROW]-1, 0)
 
@@ -54,22 +56,19 @@ class MazeMaker:
 
     def get_neighbours(self, square: tuple, search_grid: np.ndarray) -> list:
         """
-        This method returns a list of all valid neighbours for a given square.
+        Returns a list of all valid neighbours for a given square.
+
+        Returns:
+            list: Tuples of neighbouring squares.
         """
         neighbours = []
 
-        # neighbours = {}
-        # if square[ROW] < (self.rows -1) :
-        #     neighbours |= {(square[ROW]+1, square[COL]):(square[ROW]+1, square[COL])}
         if square[ROW] < (self.rows -1) and search_grid[square[ROW]+1][square[COL]] < -1:
             neighbours.append((square[ROW]+1, square[COL]))
-
         if square[ROW] > 0 and search_grid[square[ROW]-1][square[COL]] < -1:
             neighbours.append((square[ROW]-1, square[COL]))
-
         if square[COL] > 0 and search_grid[square[ROW]][square[COL]-1] < -1:
-            neighbours.append((square[ROW], square[COL]-1))
-            
+            neighbours.append((square[ROW], square[COL]-1))           
         if square[COL] < (self.columns -1) and search_grid[square[ROW]][square[COL]+1] < -1:
             neighbours.append((square[ROW], square[COL]+1))
 
@@ -78,8 +77,10 @@ class MazeMaker:
 
     def get_neighbours_with_values(self, square: tuple, search_grid: np.ndarray, value: int) -> tuple:
         """
-        This method checks and returns the neighbouring squares for a given
-        value (0: path or 1: wall).
+        Checks and returns the neighbouring squares for a given value (0: path, 1: wall).
+
+        Returns:
+            tuple: Neighbouring square with the specified value.
         """
         if square[ROW]+1 < self.rows and search_grid[square[ROW]+1][square[COL]] == value:
             return (square[ROW]+1, square[COL])
@@ -93,8 +94,10 @@ class MazeMaker:
 
     def find_route(self, start_coor: tuple, end_coor: tuple, grid_with_obstacles: np.ndarray) -> list:
         """
-        This method uses breadth first search in order to determine a route
-        between the start and end coordinates, given the obstacles.
+        Uses breadth-first search to find a route between start and end coordinates, considering obstacles.
+
+        Returns:
+            list: Tuples of coordinates representing the route.
         """
         route = []
         search_grid = np.full((self.rows, self.columns), -3, dtype=np.int32)
@@ -142,8 +145,10 @@ class MazeMaker:
 
     def path_check(self, min_route_length: int) -> bool:
         """
-        This method checks if a route is possible and meets the minimal
-        length requirement.
+        Checks if a route is possible and meets the minimum length requirement.
+
+        Returns:
+            bool: True if a valid route is found, False otherwise.
         """
         found_route = self.find_route(self.start_coor,
                                       self.goal_coor,
@@ -158,7 +163,10 @@ class MazeMaker:
 
     def create_obstacles(self, obstacle_ratio: float) -> np.ndarray:
         """
-        This method creates the obstacles for the maze.
+        Creates obstacles for the maze based on the obstacle ratio.
+
+        Returns:
+            np.ndarray: Grid with obstacles.
         """
         while True:
             self.grid_with_obstacles = np.random.choice([0, 1],
@@ -175,17 +183,31 @@ class MazeMaker:
 
 
     def return_maze(self) -> np.ndarray:
+        """
+        Returns the generated maze with obstacles.
+
+        Returns:
+            np.ndarray: The maze grid.
+        """
         return self.grid_with_obstacles
 
 
-    def return_optimal_route(self) -> list[tuple]:
+    def return_optimal_route(self) -> list:
+        """
+        Returns the optimal route found in the maze.
+
+        Returns:
+            list: List of tuples representing the optimal route.
+        """
         return self.optimal_route
 
 
-    def return_directions(self, step_list: list) -> list:
+    def return_directions(self, step_list: list) -> list[int]:
         """
-        This method returns a list with directions taken given a path.
-        0: up, 1: down, 2: left, 3: right.
+        Returns a list of directions based on the provided path.
+
+        Returns:
+            list: Directions as integers (0: up, 1: down, 2: left, 3: right).
         """
         directions = []
         for i in range(len(step_list) - 1):
@@ -196,30 +218,37 @@ class MazeMaker:
 
             # Maps direction to a numeric value
             if direction == (-1, 0):
-                directions.append(0)  # up
+                directions.append(UP)  # up
             elif direction == (1, 0):
-                directions.append(1)  # down
+                directions.append(DOWN)  # down
             elif direction == (0, -1):
-                directions.append(2)  # left
+                directions.append(LEFT)  # left
             elif direction == (0, 1):
-                directions.append(3)  # right
+                directions.append(RIGHT)  # right
 
         return directions
 
 
-    def return_start_coor(self):
+    def return_start_coor(self) -> tuple[int]:
+        """
+        Returns the start coordinates.
+
+        Returns:
+            tuple (int): Start coordinates.
+        """
         return self.start_coor
 
 
-    def return_goal_coor(self):
+    def return_goal_coor(self) -> tuple[int]:
+        """
+        Returns the goal coordinates.
+
+        Returns:
+            tuple (int): Goal coordinates.
+        """
         return self.goal_coor
 
 
 if __name__ == '__main__':
     maze = MazeMaker(10, 10, 0.5, 10)
     print(maze.return_maze())
-    # print(maze.return_optimal_route())
-    # a = maze.return_optimal_route()
-    # print(maze.return_directions(a))
-    # print(maze.return_end_coor())
-    # print(maze.return_start_coor())

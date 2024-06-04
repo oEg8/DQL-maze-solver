@@ -1,7 +1,6 @@
 import pygame
 import sys
 import numpy as np
-from MazeMaker import MazeMaker
 
 ROW = 0
 COL = 1
@@ -9,12 +8,23 @@ COL = 1
 
 class Visualiser:
     """
-    This class uses the pygame library to create a visualisation given a maze,
-    start coordinate, end coordinate and a route.
+    This class uses the pygame library to create a visualisation of a maze,
+    start coordinate, end coordinate, and a route.
 
-    - The maze being a numpy array (0: empty cell (the path), 1: wall, 2: start, 3: end)
+    - The maze is represented as a numpy array:
+        0: empty cell (path)
+        1: wall
+        2: start
+        3: end
     """
-    def __init__(self) -> None:
+    def __init__(self, fps: int = 1) -> None:
+        """
+        Initializes the Visualiser object.
+
+        Parameters:
+            fps (int): Frames per second for the visualisation. Default is 1.
+        """
+        self.fps = fps
         pygame.init()
 
         # self.grid = grid
@@ -43,26 +53,30 @@ class Visualiser:
         
         self.solved = False
 
-
-
-
-    def draw_maze(self, grid, start, position, epoch_cost, step, win_count):
+    def draw_maze(self, grid: np.ndarray, start: tuple[int, int], position: list[int], epoch_cost: float, step: int, win_count: int) -> None:
         """
-        This method draws the maze and is able to receive some keyboard inputs:
-        'p':    Plays and pauses the visualisation
-        'Esc':  Stops and exits the visualisation
-        'up arrow':     Increases fps with 1
-        'down arrow':   Decreases fps with 1
-        'r':    Resets and replays the visualisation
+        Visualizes the maze.
+
+        The following keyboard inputs are allowed:
+        - 'p': Plays and pauses the visualisation.
+        - 'Esc': Stops and exits the visualisation.
+        - 'up arrow': Increases fps by 1.
+        - 'down arrow': Decreases fps by 1.
+        - 'r': Resets and replays the visualisation.
+
+        Parameters:
+            grid (np.ndarray): The maze grid.
+            start (Tuple[int, int]): Starting coordinates of the maze.
+            position (List[int]): Current position of the agent.
+            epoch_cost (float): Cost for the current epoch.
+            step (int): Current step number.
+            win_count (int): Number of wins.
         """
         cell_size = min(self.width // np.shape(grid)[COL],
                         self.height // np.shape(grid)[ROW])
         pygame.display.set_caption('Maze')
         clock = pygame.time.Clock()
 
-        fps = 4
-
-        run = True
         RUNNING, PAUSE = 0, 1
         state = RUNNING
 
@@ -76,9 +90,9 @@ class Visualiser:
                     pygame.quit()
                     sys.exit()
                 elif event.key == pygame.K_UP:
-                    fps += 1
-                elif event.key == pygame.K_DOWN and fps > 0:
-                    fps -= 1
+                    self.fps += 1
+                elif event.key == pygame.K_DOWN and self.fps > 0:
+                    self.fps -= 1
                 elif event.key == pygame.K_p:
                     if state == RUNNING:
                         state = PAUSE
@@ -150,24 +164,4 @@ class Visualiser:
         self.screen.blit(win_count_text, (10, 70))
 
         pygame.display.flip()
-        clock.tick(fps)
-
-
-if __name__ == '__main__':
-    # grid = np.array([[2, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    #                 [1, 1, 1, 1, 1, 0, 1, 1, 1, 0],
-    #                 [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    #                 [1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
-    #                 [0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-    #                 [0, 1, 1, 0, 0, 0, 0, 1, 0, 1],
-    #                 [0, 1, 1, 0, 1, 1, 0, 1, 0, 0],
-    #                 [0, 0, 0, 0, 1, 0, 0, 0, 1, 1],
-    #                 [0, 1, 1, 0, 1, 1, 1, 0, 1, 3],
-    #                 [0, 0, 1, 0, 0, 1, 0, 0, 0, 0]])
-
-    maze = MazeMaker(4, 4, 0.5, 6)
-    grid = maze.return_maze()
-    start = maze.return_start_coor()
-    position = [start[0], start[1]]
-
-    Visualiser().draw_maze(grid, position, position, 1, 1, 1)
+        clock.tick(self.fps)
