@@ -2,6 +2,8 @@
 
 This project implements a maze navigation system using Q-learning with experience replay. It generates random mazes, trains a Q-learning model to navigate through them, and visualizes the learning process.
 
+Note: not finished, tips are welcome!
+
 ## Requirements
 
 - Python 3.x
@@ -24,7 +26,7 @@ cd yourdirectory
 3. Run the main script:
 
 ```bash
-python DQLsolver.py
+python main.py
 ```
 
 ## Files
