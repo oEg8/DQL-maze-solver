@@ -18,7 +18,7 @@ git clone https://github.com/oEg8/DQL-maze-solver.git
 2. Navigate to the project directory:
 
 ```bash
-cd maze-navigation
+cd yourdirectory
 ```
 
 3. Run the main script:
@@ -47,8 +47,8 @@ python DQLsolver.py
 
 ## Contributors
 
-- (https://github.com/oEg8)
+- https://github.com/oEg8
 
 ## License
 
-TODO: This project is licensed under the MIT License
+This project is licensed under the MIT License
