@@ -36,41 +36,15 @@ class QLearn:
 
         self.step_cost = -1
         self.illegal_cost = -5
-        self.total_reward = 0
+        self.novelty_weight = 1.0
 
-        self.env_completed = False
-        self.env_terminated = False
-        self.step = 0
-        self.max_steps = 50
-
+        self.max_steps = self.env.get_state_size()*2
         self.exploration_rate = 0.1
-        self.exploration_rate_decay = 0.995
-        self.exploration_min = 0.01
         self.win_threshhold = 20
+
 
         if self.visualise:
             self.visualiser = Visualiser(fps=2)
-
-
-    def reset(self) -> tuple[np.ndarray, tuple[int, int], list[int]]:
-        """
-        Resets the environment and generates a new maze.
-
-        Returns:
-            tuple: grid, start coordinates, position coordinates
-        """
-        env = MazeEnv(3, 3)
-        self.grid = env.get_grid()
-        self.start = env.get_start()
-        self.position = [self.start[0], self.start[1]]
-
-        self.state = self.calculate_state()
-        self.total_reward = 0
-        self.step = 0
-        self.env_completed = False
-        self.env_terminated = False
-
-        return self.grid, self.start, self.position
 
 
     def calculate_state(self) -> np.ndarray:
@@ -103,22 +77,17 @@ class QLearn:
             reward = self.step_cost
 
         state = self.calculate_state()
+        state_tuple = tuple(state)
+        self.state_visit_count[state_tuple] = self.state_visit_count.get(state_tuple, 0) + 1
+        novelty_reward = self.novelty_weight / np.sqrt(self.state_visit_count[state_tuple])
+        reward += novelty_reward
+
 
         return state, reward
 
 
-    def get_state_size(self) -> int:
-        """
-        Returns the size of the state space.
-
-        Returns:
-            int: Size of the state space.
-        """
-        return len(self.calculate_state())
-
-
     @classmethod
-    def get_action_space(cls) -> list[int]: ### check cls
+    def get_action_space(cls) -> list[int]:
         """
         Returns the action space.
 
@@ -129,7 +98,7 @@ class QLearn:
     
 
     @classmethod
-    def get_action_size(cls) -> int: ### check cls
+    def get_action_size(cls) -> int:
         """
         Returns the size of the action space.
 
@@ -248,13 +217,14 @@ class QLearn:
             **opt: Optional parameters for training.
         """
         n_episodes = opt.get('n_episodes', 15000)
-        max_memory = opt.get('max_memory', 1000)
+        max_memory = opt.get('max_memory', 15000)
         data_size = opt.get('data_size', 32)
         save_grids = opt.get('save_grids', False)
         start_time = time.time()
 
         model_file = 'best_dql_solver.h5'
 
+        # NOTE: When changing the grid size, delete the old model file. Otherwise input shape mismatches will occur.
         if os.path.exists(model_file):
             model.load_weights(model_file)
 
@@ -266,9 +236,11 @@ class QLearn:
 
             start_time_episode = time.time()
             mean_loss = 0.0
-            self.grid, self.start, self.position = self.reset()
+            self.grid, self.position, self.total_reward, self.step = self.env.reset()
             game_over = False
             episode_cost = 0
+            self.state_visit_count = {}
+
 
             if save_grids:
                 if os.path.exists('grids'):
@@ -283,17 +255,18 @@ class QLearn:
             while not game_over:
                 losses = []
                 if self.visualise:
-                    self.visualiser.draw_maze(self.grid, self.start, self.position, round(episode_cost, 3), self.step, sum(win_history))
+                    self.visualiser.draw_maze(self.grid, self.position, round(episode_cost, 3), self.step, sum(win_history))
                 possible_actions = self.env.possible_actions()
                 prev_state = state
                 if np.random.rand() < self.exploration_rate: 
-                    action = np.random.choice(self.get_action_space())  # willekeurige acties mogen wel illegaal zijn (leert minder snel)
-                    # action = np.random.choice(possible_actions)       # willekeurige acties mogen niet illegaal zijn
+                    # action = np.random.choice(self.get_action_space())  # Random action can be illegal. Learns less fast but learns what moves are illegal faster.
+                    action = np.random.choice(possible_actions)           # Random actions can't be illegal.
                 else:
                     q_values = model(prev_state.reshape(1, -1))
                     action = np.argmax(q_values[0])
 
                 state, reward = self.act(action)
+
                 episode_cost += reward
                 if self.test_for_completion():
                     win_history.append(1)
@@ -320,11 +293,10 @@ class QLearn:
             # uncomment voor een lager exploration_rate per epoch.
             # self.exploration_rate = max(self.exploration_min, self.exploration_rate * self.exploration_rate_decay)
 
-
-            win_rate = sum(win_history[-50:]) / len(win_history[-50:])
+            win_rate = sum(win_history[-100:]) / len(win_history[-100:])
             end_time = time.time()
             total_time = end_time - start_time
-            template = "Epoch: {:05d}/{:d} | Mean loss: {:06.3f} | Steps: {:02d} | Win count: {:.2f} | Win rate [-50:]: {:.2f} | time (s): {:.2f} | total time (s): {:.2f}"
+            template = "Epoch: {:05d}/{:d} | Mean loss: {:07.3f} | Steps: {:02d} | Win count: {:.2f} | Win rate [-100:]: {:.2f} | time (s): {:.2f} | total time (s): {:.2f}"
             print(template.format(episode+1, n_episodes, mean_loss, steps, sum(win_history), win_rate, epoch_time, total_time))
 
             if win_rate > 0.9:
@@ -333,7 +305,7 @@ class QLearn:
             if sum(win_history[-self.win_threshhold:]) == self.win_threshhold:
                 print(f"Reached sufficient win rate at epoch: {episode+1}")
                 break
-        
+        print(f'Overall win rate: {sum(win_history) / len(win_history)}')
         model.save_weights('best_dql_solver.h5', True, 'h5')
 
 
@@ -351,7 +323,8 @@ class QLearn:
         model.add(tf.keras.Input(shape=(env.get_state_size()),))
         model.add(Dense(units=64, activation='relu'))
         model.add(Dense(units=64, activation='relu'))
-        model.add(Dense(units=self.get_action_size(), activation='linear'))
+        model.add(Dense(units=64, activation='relu'))
+        model.add(Dense(units=self.get_action_size(), activation='softmax'))
 
         model.compile(optimizer=Adam())
 
@@ -366,11 +339,11 @@ class QLearn:
             env (MazeEnv): The maze environment.
         """
         model = self.build_model(env)
-        print(self.qtrain(model=model))
+        print(self.qtrain(model=model, n_episodes=15000))
   
 
 if __name__ == '__main__':
-    env = MazeEnv(3, 3)
+    env = MazeEnv(5, 5)
     QLearn(env=env, visualise=False).run(env=env)
 
 

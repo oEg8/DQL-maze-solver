@@ -24,11 +24,30 @@ class MazeEnv:
         self.columns = columns
         self.seed = seed
 
-        maze = MazeMaker(rows, rows, 0.4, (rows+columns)/2)
+        maze = MazeMaker(self.rows, self.rows, 0.4, (self.rows+self.columns)/2)
         self.grid = maze.return_maze()
         self.start = maze.return_start_coor()
         self.goal = maze.return_goal_coor()
         self.position = [self.start[0], self.start[1]]
+
+
+    def reset(self) -> tuple[np.ndarray, tuple[int, int], list[int]]:
+        """
+        Resets the environment and generates a new maze.
+
+        Returns:
+            tuple: grid, start coordinates, position coordinates
+        """
+        # generates a new maze
+        maze = MazeMaker(self.rows, self.rows, 0.4, (self.rows+self.columns)/2)
+        self.grid = maze.return_maze()
+        self.start = maze.return_start_coor()
+        self.goal = maze.return_goal_coor()
+        self.position = [self.start[0], self.start[1]]
+        self.total_reward = 0
+        self.step = 0
+
+        return self.grid, self.position, self.total_reward, self.step
 
 
     def move(self, action: int) -> list[int]:
@@ -41,7 +60,6 @@ class MazeEnv:
         Returns:
             List[int]: The new position of the agent after performing the action.
         """
-
         if action == UP:  
             self.position[ROW] -= 1
         elif action == DOWN:
@@ -53,6 +71,16 @@ class MazeEnv:
 
         return self.position 
 
+
+    def get_state_size(self) -> int:
+        """
+        Returns the size of the state space, which in this case, includes the flattened grid size and the position coordinates.
+
+        Returns:
+            int: The size of the state space.
+        """
+        return self.rows * self.columns + 2
+    
 
     def possible_actions(self) -> list[int]:
         """
@@ -73,16 +101,6 @@ class MazeEnv:
 
         return actions
     
-
-    def get_state_size(self) -> int:
-        """
-        Returns the size of the state space, which in this case, includes the flattened grid size and the position coordinates.
-
-        Returns:
-            int: The size of the state space.
-        """
-        return self.grid.size + 2
-
 
     def get_grid(self) -> np.ndarray:
         """

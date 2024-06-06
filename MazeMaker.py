@@ -24,9 +24,7 @@ class MazeMaker:
         self.minimum_route_length = minimum_route_length
         self.seed = np.random.seed(seed)
 
-        self.grid = np.zeros((rows, columns), dtype=np.int32)
-        self.grid_with_obstacles = self.grid
-        self.grid_with_obstacles = self.create_obstacles(self.obstacle_ratio)
+        self.final_grid = self.build_grid(self.obstacle_ratio)
 
 
     def random_start_goal(self) -> tuple:
@@ -152,7 +150,7 @@ class MazeMaker:
         """
         found_route = self.find_route(self.start_coor,
                                       self.goal_coor,
-                                      self.grid_with_obstacles)
+                                      self.final_grid)
         if len(found_route) >= min_route_length:
             self.optimal_route = found_route
             return True
@@ -161,7 +159,7 @@ class MazeMaker:
             return False
 
 
-    def create_obstacles(self, obstacle_ratio: float) -> np.ndarray:
+    def build_grid(self, obstacle_ratio: float) -> np.ndarray:
         """
         Creates obstacles for the maze based on the obstacle ratio.
 
@@ -169,17 +167,17 @@ class MazeMaker:
             np.ndarray: Grid with obstacles.
         """
         while True:
-            self.grid_with_obstacles = np.random.choice([0, 1],
+            self.final_grid = np.random.choice([0, 1],
                                                         (self.rows, self.columns),
                                                         p=[1-obstacle_ratio, obstacle_ratio])  # randomly creates obstacles
             self.start_coor, self.goal_coor = self.random_start_goal()
-            self.grid_with_obstacles[self.start_coor] = 2
-            self.grid_with_obstacles[self.goal_coor] = 3
+            self.final_grid[self.start_coor] = 2
+            self.final_grid[self.goal_coor] = 3
             path_exists = self.path_check(self.minimum_route_length)
             if path_exists:
                 break
 
-        return self.grid_with_obstacles
+        return self.final_grid
 
 
     def return_maze(self) -> np.ndarray:
@@ -189,7 +187,7 @@ class MazeMaker:
         Returns:
             np.ndarray: The maze grid.
         """
-        return self.grid_with_obstacles
+        return self.final_grid
 
 
     def return_optimal_route(self) -> list:

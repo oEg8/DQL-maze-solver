@@ -53,7 +53,7 @@ class Visualiser:
         
         self.solved = False
 
-    def draw_maze(self, grid: np.ndarray, start: tuple[int, int], position: list[int], epoch_cost: float, step: int, win_count: int) -> None:
+    def draw_maze(self, grid: np.ndarray, position: list[int], episode_cost: float, step: int, win_count: int) -> None:
         """
         Visualizes the maze.
 
@@ -66,9 +66,8 @@ class Visualiser:
 
         Parameters:
             grid (np.ndarray): The maze grid.
-            start (Tuple[int, int]): Starting coordinates of the maze.
             position (List[int]): Current position of the agent.
-            epoch_cost (float): Cost for the current epoch.
+            episode_cost (float): Cost for the current epoch.
             step (int): Current step number.
             win_count (int): Number of wins.
         """
@@ -98,10 +97,6 @@ class Visualiser:
                         state = PAUSE
                     else:
                         state = RUNNING
-                elif event.key == pygame.K_r:
-                    position = [start[ROW], start[COL]]
-                    self.solved = False
-                    state = PAUSE
 
         # When the player reaches the goal, a text will be displayed and the
         # visualisation will be closed after the predetermined delay.
@@ -153,9 +148,10 @@ class Visualiser:
         if state == PAUSE:
             self.screen.blit(self.pause_text,
                                 (self.width // 2 - self.pause_text.get_width() // 2, self.height // 2 - self.pause_text.get_height() // 2))
-            
-        epoch_cost_text = self.font.render(f'Epoch Cost: {epoch_cost}', True, self.black, self.grid_color)
-        self.screen.blit(epoch_cost_text, (10, 10))
+        
+        # Draws the episode cost, current step and win count.
+        episode_cost_text = self.font.render(f'Epoch Cost: {episode_cost}', True, self.black, self.grid_color)
+        self.screen.blit(episode_cost_text, (10, 10))
 
         step_text = self.font.render(f'Step: {step}', True, self.black, self.grid_color)
         self.screen.blit(step_text, (10, 40))
