@@ -9,6 +9,9 @@ DOWN = 1
 LEFT = 2
 RIGHT = 3
 
+MOVE_PLAYER = 0
+MOVE_GOAL = 1
+
 
 class MazeEnv:
     def __init__(self, rows: int, columns: int, seed: int = None) -> None:
@@ -24,10 +27,10 @@ class MazeEnv:
         self.columns = columns
         self.seed = seed
 
-        maze = MazeMaker(self.rows, self.rows, 0.4, (self.rows+self.columns)/2)
-        self.grid = maze.return_maze()
-        self.start = maze.return_start_coor()
-        self.goal = maze.return_goal_coor()
+        maze = MazeMaker(self.rows, self.rows, 0.4, (self.rows+self.columns)/2, seed)
+        self.grid = maze.get_maze()
+        self.start = maze.get_start_coor()
+        self.goal = [maze.get_goal_coor()[0], maze.get_goal_coor()[1]]
         self.position = [self.start[0], self.start[1]]
 
 
@@ -40,9 +43,9 @@ class MazeEnv:
         """
         # generates a new maze
         maze = MazeMaker(self.rows, self.rows, 0.4, (self.rows+self.columns)/2)
-        self.grid = maze.return_maze()
-        self.start = maze.return_start_coor()
-        self.goal = maze.return_goal_coor()
+        self.grid = maze.get_maze()
+        self.start = maze.get_start_coor()
+        self.goal = [maze.get_goal_coor()[0], maze.get_goal_coor()[1]]
         self.position = [self.start[0], self.start[1]]
         self.total_reward = 0
         self.step = 0
@@ -50,56 +53,80 @@ class MazeEnv:
         return self.grid, self.position, self.total_reward, self.step
 
 
-    def move(self, action: int) -> list[int]:
+    def move(self, action: int, action_type: int) -> list[int]:
         """
         Moves the agent in the maze based on the given action.
 
         Parameters:
             action (int): The action to move the agent. Can be one of UP, DOWN, LEFT or RIGHT.
+            action (type): The action type that needs to be taken.
 
         Returns:
             List[int]: The new position of the agent after performing the action.
         """
-        if action == UP:  
-            self.position[ROW] -= 1
-        elif action == DOWN:
-            self.position[ROW] += 1
-        elif action == LEFT:
-            self.position[COL] -= 1
-        elif action == RIGHT:
-            self.position[COL] += 1
+        if action_type == MOVE_PLAYER:
+            self.position = self.move_position(self.position, action)
+        elif action_type == MOVE_GOAL:
+            action = action - 4
+            self.grid[self.goal[0], self.goal[1]] = 0
+            self.goal = self.move_position(self.goal, action)
+            self.grid[self.goal[0], self.goal[1]] = 3
 
-        return self.position 
+
+    def move_position(self, position, action):
+        if action == UP:  
+            position[ROW] -= 1
+        elif action == DOWN:
+            position[ROW] += 1
+        elif action == LEFT:
+            position[COL] -= 1
+        elif action == RIGHT:
+            position[COL] += 1
+
+        return position
 
 
     def get_state_size(self) -> int:
         """
-        Returns the size of the state space, which in this case, includes the flattened grid size and the position coordinates.
+        Returns the size of the state space, which in this case, includes the flattened grid size, 
+        the position coordinates and the action type.
 
         Returns:
             int: The size of the state space.
         """
-        return self.rows * self.columns + 2
-    
+        return self.rows * self.columns + 3
 
-    def possible_actions(self) -> list[int]:
+    def possible_actions(self, action_type: int) -> list[int]:
         """
         Checks the possible actions the agent can take from its current position.
+
+        Parameters:
+            action_type (int): The action type the possible actions need be checked for.
 
         Returns:
             List[int]: A list of possible actions (one or more of UP, DOWN, LEFT, RIGHT).
         """
         actions = []
-        if self.position[ROW] - 1 >= 0 and self.grid[self.position[ROW] - 1][self.position[COL]] != 1:
+        if action_type == 0:
+            position = self.position
+        elif action_type == 1:
+            position = self.goal
+
+
+        if position[ROW] - 1 >= 0 and self.grid[position[ROW] - 1][position[COL]] != 1:
             actions.append(UP)
-        if self.position[ROW] + 1 < len(self.grid) and self.grid[self.position[ROW] + 1][self.position[COL]] != 1:
+        if position[ROW] + 1 < len(self.grid) and self.grid[position[ROW] + 1][position[COL]] != 1:
             actions.append(DOWN)
-        if self.position[COL] - 1 >= 0 and self.grid[self.position[ROW]][self.position[COL] - 1] != 1:
+        if position[COL] - 1 >= 0 and self.grid[position[ROW]][position[COL] - 1] != 1:
             actions.append(LEFT)
-        if self.position[COL] + 1 < len(self.grid[ROW]) and self.grid[self.position[ROW]][self.position[COL] + 1] != 1:
+        if position[COL] + 1 < len(self.grid[ROW]) and self.grid[position[ROW]][position[COL] + 1] != 1:
             actions.append(RIGHT)
 
-        return actions
+        if action_type == 0:
+            return actions
+        if action_type == 1:
+            return [a + 4 for a in actions]
+        
     
 
     def get_grid(self) -> np.ndarray:
@@ -140,3 +167,11 @@ class MazeEnv:
             List[int]: Goal position of the maze as [row, column].
         """
         return self.goal
+    
+
+if __name__ == '__main__':
+    m = MazeEnv(5, 5, 2)
+    print(m.get_grid())
+    print(m.possible_actions(1))
+    m.move(6, 1)
+    print(m.get_grid())

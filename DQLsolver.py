@@ -16,6 +16,9 @@ UP = 0
 DOWN = 1
 LEFT = 2
 RIGHT = 3 
+
+MOVE_PLAYER = 0
+MOVE_GOAL = 1
     
 
 class QLearn:
@@ -33,6 +36,7 @@ class QLearn:
         """
         self.env = env
         self.visualise = visualise
+        self.model = self.build_model(env)
 
         self.step_cost = -1
         self.illegal_cost = -5
@@ -41,7 +45,9 @@ class QLearn:
         self.max_steps = self.env.get_state_size()*2
         self.exploration_rate = 0.1
         self.win_threshhold = 20
-
+        self.discount_factor = 0.95
+        
+        self.action_type_switch = 5
 
         if self.visualise:
             self.visualiser = Visualiser(fps=2)
@@ -54,10 +60,14 @@ class QLearn:
         Returns:
             np.ndarray: The current state.
         """
-        return np.append(self.grid.flatten(), self.position)
+        if self.step % self.action_type_switch == 0:
+            return np.append(self.grid.flatten(), [self.position[0], self.position[1], 1])  # move the goal
+        else:
+            return np.append(self.grid.flatten(), [self.position[0], self.position[1], 0])  # move the player
 
 
-    def act(self, action: int) -> tuple[np.ndarray, int]:
+
+    def act(self, action: int, action_type: int) -> tuple[np.ndarray, int]:
         """
         Executes the given action in the environment.
 
@@ -67,34 +77,38 @@ class QLearn:
         Returns:
             tuple: The new state and the reward.
         """
-        possible_actions = self.env.possible_actions()
+        possible_actions = self.env.possible_actions(action_type)
         if action not in possible_actions:
-            reward = self.illegal_cost
             self.step += 1
+            reward = self.illegal_cost
         else:
-            self.position = self.env.move(action)
             self.step += 1
             reward = self.step_cost
+            self.env.move(action, action_type)
 
         state = self.calculate_state()
+
+        # novelty score calculation
         state_tuple = tuple(state)
         self.state_visit_count[state_tuple] = self.state_visit_count.get(state_tuple, 0) + 1
         novelty_reward = self.novelty_weight / np.sqrt(self.state_visit_count[state_tuple])
         reward += novelty_reward
 
-
         return state, reward
 
 
     @classmethod
-    def get_action_space(cls) -> list[int]:
+    def get_action_space(cls, action_type: int) -> list[int]:
         """
         Returns the action space.
 
         Returns:
             list: List of possible actions.
         """
-        return [UP, DOWN, LEFT, RIGHT]
+        if action_type == 0:
+            return [0, 1, 2, 3]  # action_type 1
+        elif action_type == 1:
+            return [4, 5, 6, 7]  # action_type 2
     
 
     @classmethod
@@ -105,7 +119,7 @@ class QLearn:
         Returns:
             int: Size of the action space.
         """
-        return len(cls.get_action_space())
+        return 8
 
 
     def test_for_completion(self) -> bool:
@@ -128,7 +142,20 @@ class QLearn:
         return self.step >= self.max_steps
     
 
-    def learn(self, model: Sequential, prev_state: np.ndarray, action: int, reward: int, state: np.ndarray, game_over: bool) -> float:
+    def select_action(self, state: np.ndarray, model: Sequential, epsilon: float, action_type: int) -> int:
+        if np.random.rand() < epsilon:
+            return np.random.choice(self.get_action_space(action_type))
+        else:
+            state = state.reshape(1, -1)
+            q_values = model(state)
+            q_values = tf.squeeze(q_values)
+            if action_type == 0:
+                return np.argmax(q_values[:4])  # Player actions
+            else:
+                return np.argmax(q_values[4:]) + 4  # Goal actions
+    
+
+    def learn(self, prev_state: np.ndarray, action: int, reward: int, state: np.ndarray, game_over: bool) -> float:
         """
         Trains the model using the provided experience.
 
@@ -147,19 +174,18 @@ class QLearn:
         action = tf.convert_to_tensor(action, dtype=tf.int32)
         reward = tf.convert_to_tensor(reward, dtype=tf.float32)
         state = tf.convert_to_tensor(state, dtype=tf.float32)
-        game_over = tf.convert_to_tensor(game_over, dtype=tf.bool)
+        game_over = tf.convert_to_tensor(game_over, dtype=tf.float32)
+        discount_factor = tf.convert_to_tensor(self.discount_factor, dtype=tf.float32)
 
-        discount = 0.95
+        target = self.calculate_target(state, reward, discount_factor, game_over)
 
-        target = self.calculate_target(state, reward, discount, game_over, model)
-
-        loss = self.run_gradient(model, prev_state, action, target)
+        loss = self.run_gradient(prev_state, action, target)
 
         return loss
     
 
     @tf.function
-    def calculate_target(self, state: tf.Tensor, reward: tf.Tensor, discount: float, game_over: tf.Tensor, model: Sequential) -> tf.Tensor:
+    def calculate_target(self, state: tf.Tensor, reward: tf.Tensor, discount: float, game_over: tf.Tensor) -> tf.Tensor:
         """
         Calculates the target value for training.
 
@@ -173,15 +199,15 @@ class QLearn:
         Returns:
             tf.Tensor: The target value.
         """
-        target_qv = model(state)
+        target_qv = self.model(state)
         max_target_pv = tf.reduce_max(target_qv, axis=1)
-        target = reward + (discount * max_target_pv) * tf.cast(~game_over, dtype=tf.float32)
+        target = reward + (discount * max_target_pv) * game_over
 
         return target
 
 
     @tf.function
-    def run_gradient(self, model: Sequential, prev_states: tf.Tensor, actions: tf.Tensor, target: tf.Tensor) -> tf.Tensor:
+    def run_gradient(self, prev_states: tf.Tensor, actions: tf.Tensor, target: tf.Tensor) -> tf.Tensor:
         """
         Runs the gradient descent step for training.
 
@@ -195,15 +221,14 @@ class QLearn:
             tf.Tensor: The loss from training.
         """
         with tf.GradientTape(persistent=True) as tape:
-            prediction = model(prev_states)
+            prediction = self.model(prev_states)
             
-            actions = tf.convert_to_tensor(actions, dtype=tf.int32)
             prediction_add_action = tf.gather(prediction, actions, axis=1, batch_dims=0)
 
             loss = tf.square((prediction_add_action - target))
 
-        grads = tape.gradient(loss, model.trainable_variables)
-        model.optimizer.apply_gradients(zip(grads, model.trainable_variables))
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
         return loss
 
@@ -241,7 +266,6 @@ class QLearn:
             episode_cost = 0
             self.state_visit_count = {}
 
-
             if save_grids:
                 if os.path.exists('grids'):
                     np.save(f'grid{episode}.npy', self.grid)
@@ -256,16 +280,11 @@ class QLearn:
                 losses = []
                 if self.visualise:
                     self.visualiser.draw_maze(self.grid, self.position, round(episode_cost, 3), self.step, sum(win_history))
-                possible_actions = self.env.possible_actions()
-                prev_state = state
-                if np.random.rand() < self.exploration_rate: 
-                    # action = np.random.choice(self.get_action_space())  # Random action can be illegal. Learns less fast but learns what moves are illegal faster.
-                    action = np.random.choice(possible_actions)           # Random actions can't be illegal.
-                else:
-                    q_values = model(prev_state.reshape(1, -1))
-                    action = np.argmax(q_values[0])
 
-                state, reward = self.act(action)
+                action_type = 1 if self.step % self.action_type_switch != 0 else 0
+                action = self.select_action(state, model, self.exploration_rate, action_type)
+
+                next_state, reward = self.act(action, action_type)
 
                 episode_cost += reward
                 if self.test_for_completion():
@@ -277,21 +296,19 @@ class QLearn:
                 else:
                     game_over = False
                 
-                experience = [prev_state, action, reward, state, game_over]
+                experience = [state, action, reward, next_state, game_over]
                 memory.remember(experience)
-                steps += 1
 
                 if steps % 4 == 0:
                     prev_states, actions, rewards, states, game_overs = memory.get_data(data_size=data_size)
-                    loss = self.learn(model, prev_states, actions, rewards, states, game_overs)
+                    loss = self.learn(prev_states, actions, rewards, states, game_overs)
                     losses.append(loss)
                     mean_loss = tf.reduce_mean(losses)
 
+                steps += 1
+                state = next_state
                 end_time_episode = time.time()
                 epoch_time = end_time_episode - start_time_episode
-
-            # uncomment voor een lager exploration_rate per epoch.
-            # self.exploration_rate = max(self.exploration_min, self.exploration_rate * self.exploration_rate_decay)
 
             win_rate = sum(win_history[-100:]) / len(win_history[-100:])
             end_time = time.time()
@@ -305,7 +322,7 @@ class QLearn:
             if sum(win_history[-self.win_threshhold:]) == self.win_threshhold:
                 print(f"Reached sufficient win rate at epoch: {episode+1}")
                 break
-        print(f'Overall win rate: {sum(win_history) / len(win_history)}')
+        print(f'Overall win rate: {round(sum(win_history) / len(win_history), 3)}')
         model.save_weights('best_dql_solver.h5', True, 'h5')
 
 
@@ -323,7 +340,6 @@ class QLearn:
         model.add(tf.keras.Input(shape=(env.get_state_size()),))
         model.add(Dense(units=64, activation='relu'))
         model.add(Dense(units=64, activation='relu'))
-        model.add(Dense(units=64, activation='relu'))
         model.add(Dense(units=self.get_action_size(), activation='softmax'))
 
         model.compile(optimizer=Adam())
@@ -339,7 +355,7 @@ class QLearn:
             env (MazeEnv): The maze environment.
         """
         model = self.build_model(env)
-        print(self.qtrain(model=model, n_episodes=15000))
+        print(self.qtrain(model=model, n_episodes=1000))
   
 
 if __name__ == '__main__':

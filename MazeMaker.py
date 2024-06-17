@@ -1,12 +1,13 @@
 import numpy as np
+import time
 
 ROW = 0
 COL = 1
 
-UP = 0
-DOWN = 1
-LEFT = 2
-RIGHT = 3
+UP = np.array([-1, 0])
+DOWN = np.array([1, 0])
+LEFT = np.array([0, -1])
+RIGHT = np.array([0, 1])
 
 
 class MazeMaker:
@@ -18,139 +19,159 @@ class MazeMaker:
     3: end
     """
     def __init__(self, rows: int, columns: int, obstacle_ratio: float, minimum_route_length: int, seed: int = None) -> None:
+        """
+        Initialize the MazeMaker object.
+
+        Parameters:
+            rows (int): The number of rows in the maze.
+            columns (int): The number of columns in the maze.
+            obstacle_ratio (float): The ratio of obstacles to empty cells.
+            minimum_route_length (int): The minimum required length of the route.
+        """
         self.rows = rows
         self.columns = columns
+        self.directions = [UP, DOWN, LEFT, RIGHT]
+        np.random.seed(seed)
+
         self.obstacle_ratio = obstacle_ratio
         self.minimum_route_length = minimum_route_length
-        self.seed = np.random.seed(seed)
-
+        self.start, self.goal = self.random_start_finish()
         self.final_grid = self.build_grid(self.obstacle_ratio)
 
 
-    def random_start_goal(self) -> tuple:
+    def random_start_finish(self) -> tuple[tuple[int, int], tuple[int, int]]:
         """
-        Generates random start coordinate on the maze's border and sets goal coordinate opposite from start.
+        This method generates a random coordinate for the player to start.
+        Based on that coordinate the opposite coordinate is calculated and will
+        be set as the end coordinate.
 
         Returns:
             tuple: Tuple containing start coordinates and goal coordinates.
         """
-        rng_side = np.random.randint(0, 4)
+        side = np.random.randint(0, 4)
 
-        if rng_side == UP:
-            rng_start = (0, np.random.randint(0, self.columns))
-            rng_goal = (self.rows-1, self.columns-rng_start[COL]-1)
-        elif rng_side == DOWN:
-            rng_start = (self.rows-1, np.random.randint(0, self.columns))
-            rng_goal = (0, self.columns-rng_start[COL]-1)
-        elif rng_side == LEFT:
-            rng_start = (np.random.randint(0, self.rows), 0)
-            rng_goal = (self.rows-rng_start[ROW]-1, self.columns-1)
-        elif rng_side == RIGHT:
-            rng_start = (np.random.randint(0, self.rows), self.columns-1)
-            rng_goal = (self.rows-rng_start[ROW]-1, 0)
+        if side == 0:    # top
+            start = (0, np.random.randint(0, self.columns))
+        elif side == 1:  # bottom
+            start = (self.rows - 1, np.random.randint(0, self.columns))
+        elif side == 2:  # left
+            start = (np.random.randint(0, self.rows), 0)
+        elif side == 3:  # right
+            start = (np.random.randint(0, self.rows), self.columns - 1)
 
-        return rng_start, rng_goal
+        return start, (self.rows - start[ROW] - 1, self.columns - start[COL] - 1)
 
 
-    def get_neighbours(self, square: tuple, search_grid: np.ndarray) -> list:
+    def get_neighbours(self, location: tuple[int, int], grid: np.ndarray) -> list[tuple[int, int]]:
         """
-        Returns a list of all valid neighbours for a given square.
+        This method returns a list of all valid neighbours for a given location.
+
+        Parameters:
+            square (tuple): The coordinates of the square.
+            search_grid (np.ndarray): The grid to search for neighbours.
 
         Returns:
-            list: Tuples of neighbouring squares.
+            list: A list of valid neighbours.
         """
         neighbours = []
 
-        if square[ROW] < (self.rows -1) and search_grid[square[ROW]+1][square[COL]] < -1:
-            neighbours.append((square[ROW]+1, square[COL]))
-        if square[ROW] > 0 and search_grid[square[ROW]-1][square[COL]] < -1:
-            neighbours.append((square[ROW]-1, square[COL]))
-        if square[COL] > 0 and search_grid[square[ROW]][square[COL]-1] < -1:
-            neighbours.append((square[ROW], square[COL]-1))           
-        if square[COL] < (self.columns -1) and search_grid[square[ROW]][square[COL]+1] < -1:
-            neighbours.append((square[ROW], square[COL]+1))
+        if location[ROW] > 0 and grid[a := tuple(location + UP)] < -1:
+            neighbours.append(a)
+
+        if location[ROW] < self.rows-1 and grid[a := tuple(location + DOWN)] < -1:
+            neighbours.append(a)
+
+        if location[COL] > 0 and grid[a := tuple(location + LEFT)] < -1:
+            neighbours.append(a)
+
+        if location[COL] < self.columns-1 and grid[a := tuple(location + RIGHT)] < -1:
+            neighbours.append(a)
 
         return neighbours
 
 
-    def get_neighbours_with_values(self, square: tuple, search_grid: np.ndarray, value: int) -> tuple:
+    def get_neighbour_by_value(self, grid: np.ndarray, location: tuple[int, int],  value: int) -> tuple[int, int]:
         """
-        Checks and returns the neighbouring squares for a given value (0: path, 1: wall).
+       This method checks and returns the neighbouring locations for a given
+        value (0: path or 1: wall).
+
+        Parameters:
+            square (tuple): The coordinates of the square.
+            search_grid (np.ndarray): The grid to search for neighbours.
+            value (int): The value to search for.
 
         Returns:
-            tuple: Neighbouring square with the specified value.
+            tuple: The coordinates of the neighbouring square with the specified value.
         """
-        if square[ROW]+1 < self.rows and search_grid[square[ROW]+1][square[COL]] == value:
-            return (square[ROW]+1, square[COL])
-        elif square[ROW]-1 >= 0 and search_grid[square[ROW]-1][square[COL]] == value:
-            return (square[ROW]-1, square[COL])
-        elif square[COL]-1 >= 0 and search_grid[square[ROW]][square[COL]-1] == value:
-            return (square[ROW], square[COL]-1)
-        elif square[COL]+1 < self.columns and search_grid[square[ROW]][square[COL]+1] == value:
-            return (square[ROW], square[COL]+1)
+        if location[ROW] > 0 and grid[a := tuple(location + UP)] == value:
+            return a
+        elif location[ROW] < self.rows-1 and grid[a := tuple(location + DOWN)] == value:
+            return a
+        elif location[COL] > 0 and grid[a := tuple(location + LEFT)] == value:
+            return a
+        elif location[COL] < self.columns-1 and grid[a := tuple(location + RIGHT)] == value:
+            return a
 
 
-    def find_route(self, start_coor: tuple, end_coor: tuple, grid_with_obstacles: np.ndarray) -> list:
-        """
-        Uses breadth-first search to find a route between start and end coordinates, considering obstacles.
-
-        Returns:
-            list: Tuples of coordinates representing the route.
-        """
-        route = []
-        search_grid = np.full((self.rows, self.columns), -3, dtype=np.int32)
-        search_grid[(start_coor[ROW], start_coor[COL])] = 0
-        search_grid[(end_coor[ROW], end_coor[COL])] = -2
-        for i in range(self.rows):
-            for j in range(self.columns):
-                if grid_with_obstacles[i][j] == 1:
-                    search_grid[i][j] = -1
-
+    def explore_path(self, new_expand: list[tuple[int, int]], grid: np.ndarray) -> bool:
         length = 0
-        new_expand = [(start_coor[ROW], start_coor[COL])]
-        searching = True
-        while searching:
-            to_expand = []
-            to_expand.extend(new_expand)
+        while len(to_expand := new_expand) != 0:  # as long as there is something to expand
             new_expand = []
-            for square in to_expand:
-                neighbours = self.get_neighbours(square, search_grid)
-                for n in neighbours:
-                    if search_grid[n[ROW]][n[COL]] == -2: # exit found
-                        searching = False
-                        search_grid[n[ROW]][n[COL]] = length+1 # increase length of path
-                    elif search_grid[n[ROW]][n[COL]] == -3: # path
-                        search_grid[n[ROW]][n[COL]] = length+1 # increase length of path
-                        new_expand.append((n[ROW], n[COL]))
             length += 1
-            if len(new_expand) == 0:
-                searching = False
+            for position in to_expand:
 
-        if search_grid[end_coor[ROW]][end_coor[COL]] > 0:
-            max_length = search_grid[end_coor[ROW]][end_coor[COL]]
-            route.append((end_coor[ROW], end_coor[COL]))
-            square = (end_coor[ROW], end_coor[COL])
-            while max_length > 0:
-                next_square = self.get_neighbours_with_values(square,
-                                                              search_grid,
-                                                              max_length-1)
-                route.append(next_square)
-                square = next_square
-                max_length -= 1
-            route.reverse()
+                for neighbour in self.get_neighbours(position, grid):
+                    if grid[neighbour] == -3:  # a legal stepping stone
+                        grid[neighbour] = length
+                        new_expand.append(neighbour)  # save for next expand
+                    elif grid[neighbour] == -2:  # exit is found
+                        grid[neighbour] = length
+                        return True
+        return False
+    
+
+    def trace_route(self, grid: np.ndarray, finish: tuple[int, int]) -> list[tuple[int, int]]:
+        # trace back the route
+
+        route = [finish]
+        while (length:= grid[route[0]]) != 0:
+            route[:0] = [self.get_neighbour_by_value(grid, route[0], length := length - 1)]
+
         return route
+    
 
-
-    def path_check(self, min_route_length: int) -> bool:
+    def find_route(self, start: tuple[int, int], finish: tuple[int, int], grid_with_obstacles: np.ndarray) -> list[tuple[int, int]]:
         """
-        Checks if a route is possible and meets the minimum length requirement.
+        This method uses breadth first search in order to determine a route
+        between the start and end coordinates, given the obstacles.
+        """
+
+        search_grid = np.full((self.rows, self.columns), -3, dtype=np.int32)
+        search_grid[start], search_grid[finish] = (0, -2)
+
+        search_grid = np.vectorize(lambda a, b: -1 if b == 1 else a)(search_grid, grid_with_obstacles)
+
+        if self.explore_path([start], search_grid):
+            # return self.get_route([finish], search_grid)
+            return self.trace_route(search_grid, finish)
+
+        return []  # no path in this maze
+
+
+    def path_exists(self, min_route_length: int, grid) -> bool:
+        """
+        This method checks if a route is possible and meets the minimal
+        length requirement.
+
+        Parameters:
+            min_route_length (int): The minimum length of the route.
 
         Returns:
-            bool: True if a valid route is found, False otherwise.
+            bool: True if a valid route exists, False otherwise.
         """
-        found_route = self.find_route(self.start_coor,
-                                      self.goal_coor,
-                                      self.final_grid)
+        found_route = self.find_route(self.start,
+                                      self.goal,
+                                      grid)
         if len(found_route) >= min_route_length:
             self.optimal_route = found_route
             return True
@@ -161,26 +182,27 @@ class MazeMaker:
 
     def build_grid(self, obstacle_ratio: float) -> np.ndarray:
         """
-        Creates obstacles for the maze based on the obstacle ratio.
+        Creates obstacles for the maze based on the obstacle ratio and sets the start
+        and goal coordinates.
 
         Returns:
-            np.ndarray: Grid with obstacles.
+            np.ndarray: Grid.
         """
         while True:
-            self.final_grid = np.random.choice([0, 1],
-                                                        (self.rows, self.columns),
-                                                        p=[1-obstacle_ratio, obstacle_ratio])  # randomly creates obstacles
-            self.start_coor, self.goal_coor = self.random_start_goal()
-            self.final_grid[self.start_coor] = 2
-            self.final_grid[self.goal_coor] = 3
-            path_exists = self.path_check(self.minimum_route_length)
-            if path_exists:
+            grid = np.random.choice(
+                            [0, 1], 
+                            (self.rows, self.columns), 
+                            p=[1-obstacle_ratio, obstacle_ratio])
+            
+            grid[self.start], grid[self.goal] = (2, 3)
+
+            if self.path_exists(self.minimum_route_length, grid):
                 break
 
-        return self.final_grid
+        return grid
 
 
-    def return_maze(self) -> np.ndarray:
+    def get_maze(self) -> np.ndarray:
         """
         Returns the generated maze with obstacles.
 
@@ -190,7 +212,7 @@ class MazeMaker:
         return self.final_grid
 
 
-    def return_optimal_route(self) -> list:
+    def get_optimal_route(self) -> list[tuple[int, int]]:
         """
         Returns the optimal route found in the maze.
 
@@ -200,53 +222,45 @@ class MazeMaker:
         return self.optimal_route
 
 
-    def return_directions(self, step_list: list) -> list[int]:
+    def get_directions(self, steps: list[tuple[int, int]]) -> list[int]:
         """
-        Returns a list of directions based on the provided path.
+        This method returns a list with directions taken given a path.
+        0: up, 1: down, 2: left, 3: right.
+
+        Parameters:
+            step_list (list): The list of steps representing the path.
 
         Returns:
-            list: Directions as integers (0: up, 1: down, 2: left, 3: right).
+            list: A list of directions.
         """
-        directions = []
-        for i in range(len(step_list) - 1):
-            current_step = step_list[i]
-            next_step = step_list[i + 1]
-            direction = (next_step[ROW] - current_step[ROW], 
-                         next_step[COL] - current_step[COL])
+        actions = {UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3}
 
-            # Maps direction to a numeric value
-            if direction == (-1, 0):
-                directions.append(UP)  # up
-            elif direction == (1, 0):
-                directions.append(DOWN)  # down
-            elif direction == (0, -1):
-                directions.append(LEFT)  # left
-            elif direction == (0, 1):
-                directions.append(RIGHT)  # right
-
+        directions = [actions[(end[ROW] - start[ROW], end[COL] - start[COL])]
+                      for start, end in zip(steps, steps[1:])]
+        
         return directions
 
 
-    def return_start_coor(self) -> tuple[int]:
+    def get_start_coor(self) -> tuple[int]:
         """
         Returns the start coordinates.
 
         Returns:
             tuple (int): Start coordinates.
         """
-        return self.start_coor
+        return self.start
 
 
-    def return_goal_coor(self) -> tuple[int]:
+    def get_goal_coor(self) -> tuple[int]:
         """
         Returns the goal coordinates.
 
         Returns:
             tuple (int): Goal coordinates.
         """
-        return self.goal_coor
+        return self.goal
 
 
 if __name__ == '__main__':
     maze = MazeMaker(10, 10, 0.5, 10)
-    print(maze.return_maze())
+    print(maze.get_maze())
