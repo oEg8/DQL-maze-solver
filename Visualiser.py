@@ -11,26 +11,28 @@ class Visualiser:
     This class uses the pygame library to create a visualisation of a maze,
     start coordinate, end coordinate, and a route.
 
-    - The maze is represented as a numpy array:
+    The maze should be represented as a numpy array:
         0: empty cell (path)
         1: wall
         2: start
         3: end
+
+        
+    Attributes
+    __________
+    draw_maze           : None
+                        Visualizes the maze.
     """
-    def __init__(self, fps: int = 1) -> None:
+    def __init__(self, fps: int = 2) -> None:
         """
         Initializes the Visualiser object.
 
         Parameters:
-            fps (int): Frames per second for the visualisation. Default is 1.
+            fps (int): Frames per second for the visualisation. Default is 2.
         """
-        self.fps = fps
         pygame.init()
 
-        # self.grid = grid
-        # self._position = position
-        # self.position = self._position
-
+        self.fps = fps
         self.width = 800
         self.height = 800
         self.screen = pygame.display.set_mode((self.width, self.height))
@@ -43,13 +45,8 @@ class Visualiser:
         self.grid_color = (200, 200, 200)
 
         self.font = pygame.font.SysFont('Arial', 24)
-        self.pause_text = self.font.render('Paused, press "p"',
-                                                 True, self.black,
-                                                 self.grid_color)
-        self.solved_text = self.font.render('Maze solved!',
-                                                     True,
-                                                     self.black,
-                                                     self.grid_color)
+        self.pause_text = self.font.render('Paused, press "p"', True, self.black, self.grid_color)
+        self.solved_text = self.font.render('Maze solved!', True, self.black, self.grid_color)
         
         self.solved = False
 
@@ -62,7 +59,6 @@ class Visualiser:
         - 'Esc': Stops and exits the visualisation.
         - 'up arrow': Increases fps by 1.
         - 'down arrow': Decreases fps by 1.
-        - 'r': Resets and replays the visualisation.
 
         Parameters:
             grid (np.ndarray): The maze grid.

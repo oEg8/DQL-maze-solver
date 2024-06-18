@@ -2,6 +2,18 @@ import numpy as np
 
 
 class ExperienceReplay:
+    """
+    This class contains the experience replay module for a deep q-learning algorithm.
+
+    
+    Attributes
+    __________
+    remember            : None
+                        Appends the given episode to the memory and deletes the oldest entry when maximum 
+                        length is reached.
+    get_data            : tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+                        Returns a sample of the memory for the Q-learning algorithm to learn on.
+    """
     def __init__(self, model, max_memory: int = 1000, discount: float = 0.95) -> None:
         """
         Initializes the ExperienceReplay object.
@@ -17,7 +29,7 @@ class ExperienceReplay:
         self.memory = list()
 
 
-    def remember(self, episode: tuple[np.ndarray, int, float, np.ndarray, bool]):
+    def remember(self, episode: tuple[np.ndarray, int, float, np.ndarray, bool]) -> None:
         """
         Appends the given episode to the memory and deletes the oldest entry when maximum length is reached.
 

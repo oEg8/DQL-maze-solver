@@ -24,15 +24,39 @@ MOVE_GOAL = 1
 class QLearn:
     """
     This class implements Q-learning with experience replay for a maze environment.
-    """
 
+    
+    Attributes
+    __________
+    calculate_state     : np.ndarray
+                        Calculates the state of current environment.
+    act                 : tuple[np.ndarray, int]
+                        Executes the given action in the environment.
+    test_for_completion : bool
+                        Checks if the agent has completed the environment.
+    test_for_termination: bool
+                        Checks if the maximum number of steps has been taken.
+    select_action       : int
+                        Selects the action to be taken from the output of the model.
+    learn               : float
+                        Trains the model using the provided experience.
+    calculate_target    : tf.Tensor
+                        Calculates the target value for training.
+    run_gradient        : tf.Tensor
+                        Runs the gradient descent step for training.
+    qtrain              : None
+                        Trains the model using Q-learning with experience replay.
+    build_model         : Sequential
+                        Builds the neural network model.
+    run                 : None
+                        Builds the model and starts the training process.
+    """
     def __init__(self, env: MazeEnv, visualise: bool = False) -> None: 
         """
         Initializes the QLearn object.
 
         Parameters:
             env (MazeEnv): The maze environment.
-            visualise (bool): Whether to visualize the maze. Default is False.
         """
         self.env = env
         self.visualise = visualise
@@ -47,24 +71,18 @@ class QLearn:
         self.win_threshhold = 20
         self.discount_factor = 0.95
         
-        self.action_type_switch = 5
-
         if self.visualise:
             self.visualiser = Visualiser(fps=2)
 
 
     def calculate_state(self) -> np.ndarray:
         """
-        Calculates the state, which is the flattened grid and the current position of the agent.
+        Calculates the state of current environment.
 
         Returns:
             np.ndarray: The current state.
         """
-        if self.step % self.action_type_switch == 0:
-            return np.append(self.grid.flatten(), [self.position[0], self.position[1], 1])  # move the goal
-        else:
-            return np.append(self.grid.flatten(), [self.position[0], self.position[1], 0])  # move the player
-
+        return self.env.calculate_state()
 
 
     def act(self, action: int, action_type: int) -> tuple[np.ndarray, int]:
@@ -73,6 +91,7 @@ class QLearn:
 
         Parameters:
             action (int): The action to be taken.
+            action_type (int): The action type to be taken.
 
         Returns:
             tuple: The new state and the reward.
@@ -97,39 +116,14 @@ class QLearn:
         return state, reward
 
 
-    @classmethod
-    def get_action_space(cls, action_type: int) -> list[int]:
-        """
-        Returns the action space.
-
-        Returns:
-            list: List of possible actions.
-        """
-        if action_type == 0:
-            return [0, 1, 2, 3]  # action_type 1
-        elif action_type == 1:
-            return [4, 5, 6, 7]  # action_type 2
-    
-
-    @classmethod
-    def get_action_size(cls) -> int:
-        """
-        Returns the size of the action space.
-
-        Returns:
-            int: Size of the action space.
-        """
-        return 8
-
-
     def test_for_completion(self) -> bool:
         """
-        Checks if the agent has reached the goal.
+        Checks if the agent has completed the environment.
 
         Returns:
-            bool: True if the agent has reached the goal, False otherwise.
+            bool: True if the agent has completed the environment, False otherwise.
         """
-        return self.grid[self.position[ROW]][self.position[COL]] == 3
+        return self.env.test_for_completion()
     
 
     def test_for_termination(self) -> bool:
@@ -143,8 +137,21 @@ class QLearn:
     
 
     def select_action(self, state: np.ndarray, model: Sequential, epsilon: float, action_type: int) -> int:
+        """
+        Selects the action to be taken from the output of the model.
+
+        Parameters:
+            state (np.ndarray): The current state.
+            model (Sequential): The model.
+            epsilon (float): The exploration factor.
+            action_type (int): The action type to be taken.
+        
+        Returns:
+            int: The action.
+        """
+        # 
         if np.random.rand() < epsilon:
-            return np.random.choice(self.get_action_space(action_type))
+            return np.random.choice(self.env.get_action_space(action_type))
         else:
             state = state.reshape(1, -1)
             q_values = model(state)
@@ -160,7 +167,6 @@ class QLearn:
         Trains the model using the provided experience.
 
         Parameters:
-            model (Sequential): The neural network model.
             prev_state (np.ndarray): The previous state.
             action (int): The action taken.
             reward (int): The reward received.
@@ -194,7 +200,6 @@ class QLearn:
             reward (tf.Tensor): The reward received.
             discount (float): The discount factor.
             game_over (tf.Tensor): Whether the game is over.
-            model (Sequential): The neural network model.
 
         Returns:
             tf.Tensor: The target value.
@@ -212,7 +217,6 @@ class QLearn:
         Runs the gradient descent step for training.
 
         Parameters:
-            model (Sequential): The neural network model.
             prev_states (tf.Tensor): The previous states.
             actions (tf.Tensor): The actions taken.
             target (tf.Tensor): The target values.
@@ -244,7 +248,6 @@ class QLearn:
         n_episodes = opt.get('n_episodes', 15000)
         max_memory = opt.get('max_memory', 15000)
         data_size = opt.get('data_size', 32)
-        save_grids = opt.get('save_grids', False)
         start_time = time.time()
 
         model_file = 'best_dql_solver.h5'
@@ -261,27 +264,22 @@ class QLearn:
 
             start_time_episode = time.time()
             mean_loss = 0.0
-            self.grid, self.position, self.total_reward, self.step = self.env.reset()
+            # self.grid, self.position, self.total_reward, self.step = self.env.reset() ####
+            self.env.reset()
+            self.step = 0
             game_over = False
             episode_cost = 0
             self.state_visit_count = {}
-
-            if save_grids:
-                if os.path.exists('grids'):
-                    np.save(f'grid{episode}.npy', self.grid)
-                else:
-                    os.mkdir('grids')
-                    np.save(f'grids/grid{episode}.npy', self.grid)
 
             state = self.calculate_state()
 
             steps = 0
             while not game_over:
                 losses = []
-                if self.visualise:
-                    self.visualiser.draw_maze(self.grid, self.position, round(episode_cost, 3), self.step, sum(win_history))
+                # if self.visualise: ####
+                #     self.visualiser.draw_maze(self.grid, self.position, round(episode_cost, 3), self.step, sum(win_history)) 
 
-                action_type = 1 if self.step % self.action_type_switch != 0 else 0
+                action_type = self.env.get_action_type()
                 action = self.select_action(state, model, self.exploration_rate, action_type)
 
                 next_state, reward = self.act(action, action_type)
@@ -340,14 +338,14 @@ class QLearn:
         model.add(tf.keras.Input(shape=(env.get_state_size()),))
         model.add(Dense(units=64, activation='relu'))
         model.add(Dense(units=64, activation='relu'))
-        model.add(Dense(units=self.get_action_size(), activation='softmax'))
+        model.add(Dense(units=self.env.get_action_size(), activation='softmax'))
 
         model.compile(optimizer=Adam())
 
         return model
     
 
-    def run(self, env: MazeEnv) -> None:
+    def run(self, env: MazeEnv, n_episodes) -> None:
         """
         Builds the model and starts the training process.
 
@@ -355,11 +353,11 @@ class QLearn:
             env (MazeEnv): The maze environment.
         """
         model = self.build_model(env)
-        print(self.qtrain(model=model, n_episodes=1000))
+        print(self.qtrain(model=model, n_episodes=n_episodes))
   
 
 if __name__ == '__main__':
     env = MazeEnv(5, 5)
-    QLearn(env=env, visualise=False).run(env=env)
+    QLearn(env=env, visualise=True).run(env, 1000)
 
 
